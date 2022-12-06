@@ -1,0 +1,8 @@
+name = "harem-bot"
+main = "src/index.ts"
+compatibility_date = "2022-12-06"
+[[ d1_databases ]]
+binding = "DB" # i.e. available in your Worker on env.DB
+database_name = "harems"
+database_id = "???"
+preview_database_id = "???"
