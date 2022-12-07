@@ -6,9 +6,10 @@ import {
 	ApplicationCommandOptionType,
 	ApplicationCommandType,
 	InteractionResponseType,
-	InteractionType
+	InteractionType,
+	MessageFlags
 } from 'discord-api-types/v10';
-import {create, delete_, join, leave} from "./harem";
+import {create, delete_, join, leave, setcategory} from "./harem";
 
 export interface Env {
 	publicKey: string;
@@ -22,7 +23,12 @@ export default {
 		env: Env,
 		ctx: ExecutionContext
 	): Promise<Response> {
-		return handleRequest(request, env, ctx);
+		try {
+			return await handleRequest(request, env, ctx);
+		} catch(e) {
+			console.error((e));
+			return new Response("", {status: 500})
+		}
 	},
 };
 
@@ -98,6 +104,27 @@ async function handleRequest(
 			return new Response("", {status: 400});
 		}
 		const suboptions = options[0].options ?? [];
+		if(command === "category") {
+			const category = suboptions[0].value;
+			if(typeof category !== "string") {
+				return new Response("", {status: 400});
+			}
+			const response: APIInteractionResponseChannelMessageWithSource = {
+				type: InteractionResponseType.ChannelMessageWithSource,
+				data: {
+					flags: MessageFlags.Ephemeral,
+					content: await setcategory(env, body.guild_id ?? "", category),
+					allowed_mentions: {
+						parse: []
+					}
+				}
+			}
+			return new Response(JSON.stringify(response), {
+				headers: {
+					"Content-Type": "application/json"
+				}
+			})
+		}
 		if(command === "create") {
 			const user = suboptions[0].value;
 			if(typeof user !== "string") {
@@ -110,7 +137,8 @@ async function handleRequest(
 			const response: APIInteractionResponseChannelMessageWithSource = {
 				type: InteractionResponseType.ChannelMessageWithSource,
 				data: {
-					content: await create(env, user, name),
+					flags: MessageFlags.Ephemeral,
+					content: await create(env, body.guild_id ?? "", user, name),
 					allowed_mentions: {
 						parse: []
 					}
@@ -130,7 +158,8 @@ async function handleRequest(
 			const response: APIInteractionResponseChannelMessageWithSource = {
 				type: InteractionResponseType.ChannelMessageWithSource,
 				data: {
-					content: await delete_(env, name),
+					flags: MessageFlags.Ephemeral,
+					content: await delete_(env, body.guild_id ?? "",name),
 					allowed_mentions: {
 						parse: []
 					}
@@ -143,7 +172,7 @@ async function handleRequest(
 			})
 		}
 		if(command === "join") {
-			const user = body.user?.id ?? "";
+			const user = body.member?.user.id ?? "";
 			const name = suboptions[0].value;
 			if(typeof name !== "string") {
 				return new Response("", {status: 400});
@@ -151,7 +180,8 @@ async function handleRequest(
 			const response: APIInteractionResponseChannelMessageWithSource = {
 				type: InteractionResponseType.ChannelMessageWithSource,
 				data: {
-					content: await join(env, user, name),
+					flags: MessageFlags.Ephemeral,
+					content: await join(env, body.guild_id ?? "",user, name),
 					allowed_mentions: {
 						parse: []
 					}
@@ -164,7 +194,7 @@ async function handleRequest(
 			})
 		}
 		if(command === "leave") {
-			const user = body.user?.id ?? "";
+			const user = body.member?.user?.id ?? "";
 			const name = suboptions[0].value;
 			if(typeof name !== "string") {
 				return new Response("", {status: 400});
@@ -172,7 +202,8 @@ async function handleRequest(
 			const response: APIInteractionResponseChannelMessageWithSource = {
 				type: InteractionResponseType.ChannelMessageWithSource,
 				data: {
-					content: await leave(env, user, name),
+					flags: MessageFlags.Ephemeral,
+					content: await leave(env, body.guild_id ?? "",user, name),
 					allowed_mentions: {
 						parse: []
 					}
@@ -186,14 +217,12 @@ async function handleRequest(
 		}
 	}
 	if(body.type === InteractionType.ApplicationCommandAutocomplete) {
-		console.log(JSON.stringify(body));
-
 		const response: APIApplicationCommandAutocompleteResponse = {
 			type: InteractionResponseType.ApplicationCommandAutocompleteResult,
 			data: {
-				choices: ((await env.DB.prepare("SELECT * FROM harems").all()).results ??[]).map((x) => ({
-					name: (x as {Name: string}).Name,
-					value: (x as {Name: string}).Name
+				choices: ((await env.DB.prepare("SELECT * FROM harems WHERE `guild`=?").bind(body.guild_id ?? "").all()).results ??[]).map((x) => ({
+					name: (x as {name: string}).name,
+					value: (x as {name: string}).name
 				}))
 			}
 		}
